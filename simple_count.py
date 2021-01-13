@@ -5,10 +5,10 @@ import matplotlib.pyplot as plt
 hdulist = fits.open("mosaic.fits")
 
 #Test data
-data = [[10,1,1,2,1,2,1,2,1,2,1,10],
-        [1,10,1,2,1,10,1,2,1,2,1,10],
-        [1,1,1,2,10,10,10,2,1,2,1,2],
-        [10,2,1,2,1,2,1,2,1,2,1,10]]
+data = [[1,1,1,2,1,2,1,2,1,2,1,1],
+        [1,1,1,2,1,30,1,2,1,2,1,1],
+        [1,1,1,2,30,1,1,2,1,2,1,30],
+        [1,2,1,2,1,2,1,2,1,2,1,30]]
 dimensions = (len(data),len(data[0]))
 
 #Mask is altered when sources are found. Sources are given integer identifiers which are added into mask.
@@ -34,18 +34,18 @@ def source_handler(data,x,y,mask,background,dimensions,count):
 
     if x_low < 0:
         x_low = 0
-    if x_high > dimensions[1]:
-        x_high = dimensions[1]
+    if x_high >= dimensions[1]:
+        x_high = dimensions[1] -1
     if y_low < 0:
         y_low = 0
-    if y_high > dimensions[0]:
-        y_high = dimensions[0]                    
+    if y_high >= dimensions[0]:
+        y_high = dimensions[0] -1                    
 
-    for j in range(y_low,y_high):         
-        for i in range(x_low,x_high):
-           # print("here",x,y)
-            #print("i",i,"j",j,"mask",mask[j][i])
+    for j in range(y_low,y_high+1):         
+        for i in range(x_low,x_high+1):
+
             if mask[j][i] > 0:
+
                 mask[y][x] = mask[j][i]         
     if  mask[y][x] == 0:
         count +=1
