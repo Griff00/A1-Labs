@@ -24,46 +24,46 @@ frame_x_left = 1
 frame_x_right = 1
 frame_y_top = 1
 frame_y_bottom = 1
-frame_cutoffs = (frame_x_left,frame_x_right,frame_y_top,frame_y_bottom)
+#g: made below into a dictionary, so it keeps meaningful names while storing the same info
+frame_cutoffs = {"xl":frame_x_left,"xr":frame_x_right,"yt":frame_y_top,"yb":frame_y_bottom}
 
 
 class Source:
-
-    source_count = 0
+    #g: not sure if this is the right place for this- we can make a list of the sources outside their class.
+    #   would take plenty of restructuring so will not do it now, but smth to think abt
     source_list = []
-   
     def __init__(self,identifier,location,count):
                  
         self.identifier = identifier
-        self.pixel_coords = []
-        self.pixel_counts = []
-        self.pixel_coords.append(location)
-        self.pixel_counts.append(count)
-        Source.source_count +=1           
+        self.pixel_coords = [location]
+        self.pixel_counts = [count] 
         Source.source_list.append(self)
         
     def add_pixel(self,location,count):
         self.pixel_coords.append(location)
         self.pixel_counts.append(count)
         
+    def get_pixel_coords(self):
+        return self.pixel_coords
+        
 
 def mask_frame(mask,frame_cutoffs):
-
-    for j in range(0,frame_y_top):
+    #g: changed this so it was actually using the values passed in, instead of prestored values
+    for j in range(0,frame_cutoffs["yt"]):
         for i in range(0,len(mask[0])):
             mask[j][i] = False
             
-    for j in range(( (dimensions[0]) -frame_y_bottom),dimensions[0]):
+    for j in range(((dimensions[0])-frame_cutoffs["yb"]),dimensions[0]):
         for i in range(0,len(mask[0])):
             mask[j][i] = False
     
     mask = np.transpose(mask)
     
-    for j in range(0,frame_x_left):
+    for j in range(0,frame_cutoffs["xl"]):
         for i in range(0,len(mask[0])):
             mask[j][i] = False
             
-    for j in range(( (dimensions[1]) -frame_x_right),dimensions[1]):
+    for j in range(( (dimensions[1]) -frame_cutoffs["xr"]),dimensions[1]):
         for i in range(0,len(mask[0])):
             mask[j][i] = False
             
@@ -71,18 +71,41 @@ def mask_frame(mask,frame_cutoffs):
     
     return mask
 
+def calculate_background_contribution(source, data, aperture_radius=12):
+    #Calculates the total background contribution to a given source
+    n_pixels_considered = 0
+    total_counts = 0
+    coords = source.get_pixel_coords()
+    
+    #calculate average centres for the surce (where aperture will be centred)
+    x_avg_source = sum(map(lambda x: x[0], coords))/len(coords)
+    y_avg_source = sum(map(lambda x: x[1], coords))/len(coords)
+    
+    #find + sum over the aperture
+    for y in range(0,len(data)):
+        for x in range(0,len(data[0])):
+            if (y-y_avg_source)**2+(x-x_avg_source)**2 < aperture_radius**2:
+                if not (x,y) in coords:
+                    total_counts += data[y][x]
+                    n_pixels_considered += 1
+                    
+    local_bg_emmission = total_counts/n_pixels_considered
+    total_contribution_to_source = local_bg_emmission*len(coords)
+    
+    return total_contribution_to_source
+    
+
 def source_detection(data,mask,background,dimensions,source_map,frame_cutoffs): 
     # Cyles through each pixel checking for sources
     count = 0
     for y in range(0,len(data)):
-        for x in range(0,len(data[0])):            
-            
+        for x in range(0,len(data[0])):
             if mask[y][x] == True:            
                 if data[y][x] > background:
-                    count, source_map = source_handler(data,x,y,mask,background,dimensions,count,source_map)
+                    count, source_map = source_handler(data,x,y,mask,dimensions,count,source_map)
     return count,mask,source_map
                 
-def source_handler(data,x,y,mask,background,dimensions,count,source_map):
+def source_handler(data,x,y,mask,dimensions,count,source_map):
     # Once a source is found, need to determine if pixel is part of a mulit-pixel distributed source
     x_low = x-1
     x_high = x+1
@@ -96,7 +119,7 @@ def source_handler(data,x,y,mask,background,dimensions,count,source_map):
     if y_low < 0:
         y_low = 0
     if y_high >= dimensions[0]:
-        y_high = dimensions[0] -1                    
+        y_high = dimensions[0] -1              
 
     source_added = False
     for j in range(y_low,y_high+1):         
@@ -114,15 +137,13 @@ def source_handler(data,x,y,mask,background,dimensions,count,source_map):
                     
     if  source_map[y][x] == 0:
         count +=1
-        s = Source(count,(x,y), data[y][x])
+        Source(count,(x,y), data[y][x])
 
         source_map[y][x] = count
     return count, source_map
 
 mask = mask_frame(mask, frame_cutoffs)
 count, mask, source_map = source_detection(data,mask,background,dimensions,source_map,frame_cutoffs)
-
-
 
 
 
