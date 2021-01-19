@@ -8,18 +8,22 @@ import scipy.optimize as spo
 hdulist = fits.open("mosaic.fits")
 
 #Test data
-#data = hdulist[0].data
-data = [[1,1,1,2,1,2,1,2,1,2,1,1],
+real_data = hdulist[0].data
+generated_test_data = [[1,1,1,2,1,2,1,2,1,2,1,1],
         [1,1,1,2,1,30,30,2,1,2,40,1],
         [1,1,1,2,1,30,30,2,1,2,1,1],
         [1,2,1,2,1,2,1,2,1,2,1,1]]
-dimensions = (len(data),len(data[0]))
 
 header = hdulist[0].header
 
 instrument_zero_point = header['MAGZPT']
 instrument_zero_point_err = header['MAGZRR']
 
+#Cutting out the specified test region
+
+test_data = list(map(lambda x: x[660:1260], real_data[3960:4340]))
+
+data = test_data
 
 #----------------------HISTOGRAM------------------------#
 
@@ -37,7 +41,7 @@ for row in data:
 data_max = max(maxes)
 
 #Change this to make the histogram more/less dettailed
-histogram_no_of_bins = 1000
+histogram_no_of_bins = 100
 
 #Set up the bins
 histogram_bin_size = (data_max - data_min)/histogram_no_of_bins
@@ -80,11 +84,7 @@ print("The parameters used to calculate this fit were a mean of %f \pm %f, a sta
 #------------------SOURCE DETECTION-------------------------#
 
 
-
-mean = np.mean(data)
-std = np.std(data)
-
-background = mean + std #Just tempory!! Until we have actual background
+background = gaussian_params[0] + gaussian_params[1] #Only an initial estimate
 
 mask = np.ones(dimensions, dtype=bool)
 source_map = np.zeros(dimensions)
@@ -125,7 +125,11 @@ class Source:
 
     def get_num_pixels(self):
         return self.num_pixels
-        
+    
+    def get_magnitude(self, inst_zero_point):
+        tot_counts = sum(self.pixel_counts)
+        mag = inst_zero_point -2.5*np.log(tot_counts)/np.log(10)
+        return mag
 
 def mask_frame(mask,frame_cutoffs):
     #g: changed this so it was actually using the values passed in, instead of prestored values
@@ -175,17 +179,17 @@ def calculate_background_contribution(source, data, aperture_radius=12):
     return total_contribution_to_source
     
 
-def source_detection(data,mask,background,dimensions,source_map,frame_cutoffs): 
+def source_detection(data,mask,background,source_map,frame_cutoffs): 
     # Cyles through each pixel checking for sources
     count = 0
     for y in range(0,len(data)):
         for x in range(0,len(data[0])):
             if mask[y][x] == True:            
                 if data[y][x] > background:
-                    count, source_map = source_handler(data,x,y,mask,dimensions,count,source_map)
+                    count, source_map = source_handler(data,x,y,mask,count,source_map)
     return count,mask,source_map
                 
-def source_handler(data,x,y,mask,dimensions,count,source_map):
+def source_handler(data,x,y,mask,count,source_map):
     # Once a source is found, need to determine if pixel is part of a mulit-pixel distributed source
     x_low = x-1
     x_high = x+1
@@ -194,12 +198,12 @@ def source_handler(data,x,y,mask,dimensions,count,source_map):
 
     if x_low < 0:
         x_low = 0
-    if x_high >= dimensions[1]:
-        x_high = dimensions[1] -1
+    if x_high >= len(data[0]):
+        x_high = len(data[0]) -1
     if y_low < 0:
         y_low = 0
-    if y_high >= dimensions[0]:
-        y_high = dimensions[0] -1              
+    if y_high >= len(data):
+        y_high = len(data) -1              
 
     source_added = False
     for j in range(y_low,y_high+1):         
@@ -223,7 +227,7 @@ def source_handler(data,x,y,mask,dimensions,count,source_map):
     return count, source_map
 
 def contam_removal(mask, source_map,lower_pix_limit, upper_pix_limit):
-    print("running")
+    #print("running")
     galaxy_map = source_map.copy()
     for ob in Source.galaxy_list:
         if ob.get_num_pixels() <= lower_pix_limit or ob.get_num_pixels() >= upper_pix_limit:
@@ -234,12 +238,12 @@ def contam_removal(mask, source_map,lower_pix_limit, upper_pix_limit):
                     if galaxy_map[j][i] == ob.identifier:
                         galaxy_map[j][i] = 0
                         mask[j][i] = False
-                        print("here")
+                        #print("here")
                         
     return galaxy_map, mask
 
 mask = mask_frame(mask, frame_cutoffs)
-count, mask, source_map = source_detection(data,mask,background,dimensions,source_map,frame_cutoffs)
+count, mask, source_map = source_detection(data,mask,background,source_map,frame_cutoffs)
 galaxy_map, mask = contam_removal(mask, source_map,lower_pix_limit, upper_pix_limit)
 
 
