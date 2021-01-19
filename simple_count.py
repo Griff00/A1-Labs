@@ -20,7 +20,6 @@ instrument_zero_point = header['MAGZPT']
 instrument_zero_point_err = header['MAGZRR']
 
 #Cutting out the specified test region
-
 test_data = list(map(lambda x: x[660:1260], real_data[3960:4340]))
 
 data = test_data
@@ -86,15 +85,12 @@ print("The parameters used to calculate this fit were a mean of %f \pm %f, a sta
 
 background = gaussian_params[0] + gaussian_params[1] #Only an initial estimate
 
-mask = np.ones(dimensions, dtype=bool)
-source_map = np.zeros(dimensions)
+mask = np.ones((len(data), len(data[0])), dtype=bool)
+source_map = np.zeros((len(data), len(data[0])))
 
-frame_x_left = 1
-frame_x_right = 1
-frame_y_top = 1
-frame_y_bottom = 1
 #g: made below into a dictionary, so it keeps meaningful names while storing the same info
-frame_cutoffs = {"xl":frame_x_left,"xr":frame_x_right,"yt":frame_y_top,"yb":frame_y_bottom}
+frame_cutoffs = {"xl":150,"xr":2450,"yt":4500,"yb":150} #for the full real data
+
 
 #j: lower & upper pixel number limits for removing contamination
 lower_pix_limit = 1
@@ -137,7 +133,7 @@ def mask_frame(mask,frame_cutoffs):
         for i in range(0,len(mask[0])):
             mask[j][i] = False
             
-    for j in range(((dimensions[0])-frame_cutoffs["yb"]),dimensions[0]):
+    for j in range(((len(mask))-frame_cutoffs["yb"]),len(mask)):
         for i in range(0,len(mask[0])):
             mask[j][i] = False
     
@@ -147,7 +143,7 @@ def mask_frame(mask,frame_cutoffs):
         for i in range(0,len(mask[0])):
             mask[j][i] = False
             
-    for j in range(( (dimensions[1]) -frame_cutoffs["xr"]),dimensions[1]):
+    for j in range(((len(mask)) -frame_cutoffs["xr"]),len(mask)):
         for i in range(0,len(mask[0])):
             mask[j][i] = False
             
@@ -155,7 +151,13 @@ def mask_frame(mask,frame_cutoffs):
     
     return mask
 
-def calculate_background_contribution(source, data, aperture_radius=12):
+def mask_box(mask, box_x1, box_x2, box_y1, box_y2):
+    for i in range(box_x1, box_x2):
+        for j in range(box_y1,box_y2):
+            mask[i][j] = False
+    return mask
+
+def calculate_background_contribution(source, data, mask, aperture_radius=12): #update so checks against mask
     #Calculates the total background contribution to a given source
     n_pixels_considered = 0
     total_counts = 0
@@ -169,7 +171,7 @@ def calculate_background_contribution(source, data, aperture_radius=12):
     for y in range(0,len(data)):
         for x in range(0,len(data[0])):
             if (y-y_avg_source)**2+(x-x_avg_source)**2 < aperture_radius**2:
-                if not (x,y) in coords:
+                if not (x,y) in coords and mask[x][y] == True:
                     total_counts += data[y][x]
                     n_pixels_considered += 1
                     
@@ -184,7 +186,7 @@ def source_detection(data,mask,background,source_map,frame_cutoffs):
     count = 0
     for y in range(0,len(data)):
         for x in range(0,len(data[0])):
-            if mask[y][x] == True:            
+            if mask[y][x] == True:      
                 if data[y][x] > background:
                     count, source_map = source_handler(data,x,y,mask,count,source_map)
     return count,mask,source_map
@@ -243,6 +245,19 @@ def contam_removal(mask, source_map,lower_pix_limit, upper_pix_limit):
     return galaxy_map, mask
 
 mask = mask_frame(mask, frame_cutoffs)
+
+#areas with high noise in the corners
+mask = mask_box(mask,0,410,0,200)
+mask = mask_box(mask,0,200,0,410)
+mask = mask_box(mask,2100,len(mask),4400,len(mask[0]))
+mask = mask_box(mask,2350,len(mask),4100,len(mask[0]))
+
+#bright central star (and bleeding from it)
+mask = mask_box(mask,1200,1650,2950,3450)
+mask = mask_box(mask,1420,1460,0,len(mask[0]))
+mask = mask_box(mask,1100,1650,0,500)
+
+
 count, mask, source_map = source_detection(data,mask,background,source_map,frame_cutoffs)
 galaxy_map, mask = contam_removal(mask, source_map,lower_pix_limit, upper_pix_limit)
 
