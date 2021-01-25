@@ -5,7 +5,6 @@ Created on Fri Jan 22 12:29:10 2021
 @author: Jack
 """
 
-
 from astropy.io import fits
 import numpy as np
 import matplotlib.pyplot as plt
@@ -31,65 +30,62 @@ data = real_data
 #-------------------------------------------------------#
 #----------------------HISTOGRAM------------------------#
 #-------------------------------------------------------#
-
-#Change this to make the histogram more/less dettailed
-histogram_no_of_bins = 500
-
-#Building the histogram of data
-
-#finding the min. and max. count values of the data
-
-
-
-mins = []
-for row in data:
-    mins.append(min(row))
-data_min = min(mins)
-
-maxes = []
-for row in data:
-    maxes.append(max(row))
-data_max = max(maxes)
-data_min = 2600
-data_max = 3600
-
-#Set up the bins
-histogram_bin_size = (data_max - data_min)/histogram_no_of_bins
-histogram_bin_lowest_vals = list(range(data_min,data_max,int(histogram_bin_size)))[:histogram_no_of_bins]
-
-#Count the number of pixels in each bin
-histogram_counts = np.zeros(histogram_no_of_bins)
-for row in data:
-    for i in row:
-        bin_number = int(np.floor((i - data_min) / histogram_bin_size))
-        if bin_number == histogram_no_of_bins: #The highest value causes an error
-            bin_number -= 1
-        if bin_number < histogram_no_of_bins and not bin_number < 0 : #The highest value causes an error
-                    
-            histogram_counts[bin_number] += 1
-
-#Plot- n.b the [:6] is to exclude the really high point, which is at [6]
-plt.plot(histogram_bin_lowest_vals,histogram_counts, 'kx')
-plt.xlabel('Number of counts')
-plt.ylabel('Number of incidences')
-
-#Fit Gaussian to noise
-
-def Gaussian(x, mean, std, scaling):
-    return scaling*np.e**(-(x-mean)**2/(2*std**2))
-
-#The actual fitting to the data - settles but errors are v high- most of the vals being considered are 0. 
-gaussian_params, pcov= spo.curve_fit(Gaussian,histogram_bin_lowest_vals,histogram_counts, p0=[3240,200,1e7])
-gaussian_params_errs = np.sqrt(np.diag(pcov))
-
-#Generating a plottable version 
-g_xvals = np.linspace(data_min, data_max, 1000)
-g_yvals = Gaussian(g_xvals, *gaussian_params)
-
-plt.plot(g_xvals,g_yvals, 'r-')
-plt.show()
-
-print("The parameters used to calculate this fit were a mean of %f \pm %f, a standard deviation of %f \pm %f, and a scaling factor of %f \pm %f"%(gaussian_params[0], gaussian_params_errs[0], gaussian_params[1], gaussian_params_errs[1] , gaussian_params[2],gaussian_params_errs[2]))
+plot_histogram = False
+if plot_histogram:
+    #Change this to make the histogram more/less detailed
+    histogram_no_of_bins = 500
+    
+    ''' 
+    mins = []
+    for row in data:
+        mins.append(min(row))
+    data_min = min(mins)
+    
+    maxes = []
+    for row in data:
+        maxes.append(max(row))
+    data_max = max(maxes)
+    '''
+    
+    #Use these pre-set values as the whole dataset was skewing the Gaussian
+    data_min = 2600
+    data_max = 3600
+    
+    #Set up the bins
+    histogram_bin_size = (data_max - data_min)/histogram_no_of_bins
+    histogram_bin_lowest_vals = list(range(data_min,data_max,int(histogram_bin_size)))[:histogram_no_of_bins]
+    
+    #Count the number of pixels in each bin
+    histogram_counts = np.zeros(histogram_no_of_bins)
+    for row in data:
+        for i in row:
+            bin_number = int(np.floor((i - data_min) / histogram_bin_size))
+            if bin_number == histogram_no_of_bins:
+                bin_number -= 1
+            if bin_number < histogram_no_of_bins and not bin_number < 0 : 
+                histogram_counts[bin_number] += 1
+                
+    plt.plot(histogram_bin_lowest_vals,histogram_counts, 'kx')
+    plt.xlabel('Number of counts')
+    plt.ylabel('Number of incidences')
+    
+    #Fit Gaussian to noise
+    
+    def Gaussian(x, mean, std, scaling):
+        return scaling*np.e**(-(x-mean)**2/(2*std**2))
+    
+    #The actual fitting to the data - settles but errors are v high- most of the vals being considered are 0. 
+    gaussian_params, pcov= spo.curve_fit(Gaussian,histogram_bin_lowest_vals,histogram_counts, p0=[3240,200,1e7])
+    gaussian_params_errs = np.sqrt(np.diag(pcov))
+    
+    #Generating a plottable version 
+    g_xvals = np.linspace(data_min, data_max, 1000)
+    g_yvals = Gaussian(g_xvals, *gaussian_params)
+    
+    plt.plot(g_xvals,g_yvals, 'r-')
+    plt.show()
+    
+    print("The parameters used to calculate this fit were a mean of %f \pm %f, a standard deviation of %f \pm %f, and a scaling factor of %f \pm %f"%(gaussian_params[0], gaussian_params_errs[0], gaussian_params[1], gaussian_params_errs[1] , gaussian_params[2],gaussian_params_errs[2]))
 
 
 
@@ -100,25 +96,27 @@ print("The parameters used to calculate this fit were a mean of %f \pm %f, a sta
 
 
 class Source:
-    #g: not sure if this is the right place for this- we can make a list of the sources outside their class.
-    #   would take plenty of restructuring so will not do it now, but smth to think abt
     #List of all sources (regardless if they are galaxies or not)
     source_list = []
     #j: Dictionary of [id:source_object]
     source_dict = {}
     #List of all objects identified as galaxies
     galaxy_list = []
-    # (tempory) lists for debugging purposes
+    # (temporary) lists for debugging purposes
     segment_list = []
     removed_list = []
     allobs_list = []
     
-    def __init__(self,identifier,location,count):
-                 
+    def __init__(self,identifier,location,count):                 
         self.num_pixels = 1
         self.identifier = identifier
         self.pixel_coords = [location]
         self.pixel_counts = [count] 
+        self.pixel_count_errors = [np.sqrt(count)]
+        self.background_contribution = [0,0]
+        self.mag = np.inf
+        self.mag_err = 0
+        
         Source.source_list.append(self)
         Source.galaxy_list.append(self)
         Source.allobs_list.append(self)
@@ -128,13 +126,12 @@ class Source:
         self.num_pixels +=1
         self.pixel_coords.append(location)
         self.pixel_counts.append(count)
+        self.pixel_count_errors.append(np.sqrt(count))
         
-    def set_background_contribution(self,background_contribution):
+    def set_background_contribution(self,background_contribution, background_contribution_err):
         self.background_contribution = background_contribution
+        self.background_contribution_err = background_contribution_err
 
-    def set_mag(self,mag):
-        self.mag = mag       
-        
     def get_pixel_coords(self):
         return self.pixel_coords
 
@@ -143,22 +140,22 @@ class Source:
     
     def get_pixel_counts(self):
         return self.pixel_counts
-
-    def get_id(self):
-        return self.identifier
    
-    def get_magnitude(self, inst_zero_point):
+    def find_magnitude(self, inst_zero_point, inst_zero_point_err):
         tot_counts = sum(self.pixel_counts) - self.background_contribution
+        tot_counts_err = np.sqrt(sum(map(lambda x: x**2, self.pixel_count_errors)) + self.background_contribution_err**2)
+        
         if tot_counts <= 0:
             print("tot",tot_counts)
             tot_counts = 1
-        mag = inst_zero_point -2.5*np.log(tot_counts)/np.log(10)
-        return mag     
+            tot_counts_err = 0
+        
+        self.mag = inst_zero_point -2.5*np.log(tot_counts)/np.log(10)
+        self.mag_err = np.sqrt(inst_zero_point_err**2 + (2.5/np.log(10)/tot_counts*tot_counts_err)**2)
+        
+        return self.mag, self.mag_err
 
-
-# PROBABLY DONT NEED THIS FUNCTION ANYMORE: USE MASK_BOX INSTEAD
 def mask_frame(mask,frame_cutoffs):
-    #g: changed this so it was actually using the values passed in, instead of prestored values
     for j in range(0,frame_cutoffs["yt"]):
         for i in range(0,len(mask[0])):
             mask[j][i] = False
@@ -190,17 +187,17 @@ def mask_box(mask, box_x1, box_x2, box_y1, box_y2):
 def calculate_background_contribution(source, data,mask, global_background, aperture_radius=12):
     #Calculates the total background contribution to a given source
     n_pixels_considered = 0
-    total_counts = 0
+    counts_considered = []
     coords = source.get_pixel_coords()
     
     #calculate average centres for the surce (where aperture will be centred)
     x_avg_source = sum(map(lambda x: x[0], coords))/len(coords)
     y_avg_source = sum(map(lambda x: x[1], coords))/len(coords)
     
-    x_low = int(x_avg_source - (aperture_radius +5))
-    x_high = int(x_avg_source + (aperture_radius +5))
-    y_high = int(y_avg_source + (aperture_radius +5))
-    y_low = int(y_avg_source - (aperture_radius +5))
+    x_low = int(x_avg_source - (aperture_radius + 5))
+    x_high = int(x_avg_source + (aperture_radius + 5))
+    y_high = int(y_avg_source + (aperture_radius + 5))
+    y_low = int(y_avg_source - (aperture_radius + 5))
     
     if x_low < 0:
         x_low = 0
@@ -209,28 +206,25 @@ def calculate_background_contribution(source, data,mask, global_background, aper
     if y_low < 0:
         y_low = 0
     if y_high >= len(data):
-        y_high = len(data) -1           
-    
+        y_high = len(data) -1
     
     #find + sum over the aperture
     for y in range(y_low,y_high):
-        
-        for x in range(x_low,x_high):
-            
+        for x in range(x_low,x_high):            
             if (y-y_avg_source)**2+(x-x_avg_source)**2 < aperture_radius**2:
                 if not (x,y) in coords and mask[y][x] == True:
-                    total_counts += data[y][x]
+                    counts_considered.append(data[y][x])
                     n_pixels_considered += 1
                     
     if n_pixels_considered != 0:
-        
-        local_bg_emmission = total_counts/n_pixels_considered
+        local_bg_emmission = sum(counts_considered)/n_pixels_considered
+        local_emmission_err = np.std(counts_considered)
         total_contribution_to_source = local_bg_emmission*len(coords)
-        
     else:
         total_contribution_to_source = global_background*len(coords)
+        local_emmission_err = np.sqrt(global_background)
     
-    return total_contribution_to_source
+    return total_contribution_to_source, local_emmission_err
     
 
 def source_detection(data,mask,background,source_map,frame_cutoffs): 
@@ -244,7 +238,6 @@ def source_detection(data,mask,background,source_map,frame_cutoffs):
                     source_id, source_map = source_handler(data,x,y,mask,source_id,source_map)
     return source_id,mask,source_map
 
-           
 def source_handler(data,x,y,mask,source_id,source_map):
     # Once a source is found, need to determine if pixel is part of a mulit-pixel distributed source
     #Check neighbour pixels for already catalogued sources
@@ -265,21 +258,16 @@ def source_handler(data,x,y,mask,source_id,source_map):
 
     for j in range(y_low,y_high+1):         
         for i in range(x_low,x_high+1):
-            
             #Check if pixel is masked
             if mask[j][i] == True:
-            
                 #If there is neighbour source
                 if source_map[j][i] > 0: 
-                    
                     #Add current pixel to neighbour source
                     if source_map[y][x] == 0:
                         source_map[y][x] = source_map[j][i]
                         Source.source_dict[source_map[y][x]].add_pixel((x,y), data[y][x])
-                        
                     #Pixel has at least 2 neighbour sources --> need to combine these neighbour segments into 1 source 
                     elif source_map[y][x] != source_map[j][i]:
-                                                                       
                         #Identify 'true' source, and the 'segment' to be added (true source has earliest id)
                         if source_map[y][x] > source_map[j][i]:
                             true_id = source_map[j][i]
@@ -306,8 +294,8 @@ def source_handler(data,x,y,mask,source_id,source_map):
     if  source_map[y][x] == 0:
         source_id +=1
         Source(source_id,(x,y), data[y][x])
-
         source_map[y][x] = source_id
+    
     return source_id, source_map
 
 def contam_removal(mask, source_map,lower_pix_limit, upper_pix_limit):
@@ -316,40 +304,35 @@ def contam_removal(mask, source_map,lower_pix_limit, upper_pix_limit):
     galaxy_list_orig = Source.galaxy_list.copy()
     
     for ob in galaxy_list_orig:        
-        
         if ob.get_num_pixels() <= lower_pix_limit or ob.get_num_pixels() >= upper_pix_limit:
             Source.galaxy_list.remove(ob)
             Source.removed_list.append(ob)
                                 
             coords = ob.get_pixel_coords()
             for i in range(0,len(coords)):
-                #print("coords",coords)
-                
                 galaxy_map[coords[i][1]][coords[i][0]] = 0
                 mask[coords[i][1]][coords[i][0]] = False
                           
     return galaxy_map, mask
+   
 
-#def remove_galaxy(source_ob, galaxy_map, mask):
-    
-
-#-------------------MASK---------------------------------#
+#-------------------BUILDING THE MASK---------------------------------#
 
 mask = np.ones((len(data),len(data[0])), dtype=bool)
-#g: made below into a dictionary, so it keeps meaningful names while storing the same info
 # For test data
 #frame_cutoffs = {"xl":1,"xr":1,"yt":1,"yb":1}
 #For real data
 #frame_cutoffs = {"xl":150,"xr":2450,"yt":4500,"yb":150} 
 frame_cutoffs = {"xl":150,"xr":120,"yt":111,"yb":150} 
 mask = mask_frame(mask, frame_cutoffs)
-# #areas with high noise in the corners
+
+#areas with high noise in the corners
 mask = mask_box(mask,0,410,0,200)
 mask = mask_box(mask,0,200,0,410)
 mask = mask_box(mask,2100,len(mask),4400,len(mask[0]))
 mask = mask_box(mask,2350,len(mask),4100,len(mask[0]))
 
-# #bright central star (and bleeding from it)
+#bright central star (and bleeding from it)
 mask = mask_box(mask,1200,1650,2950,3450)
 mask = mask_box(mask,1420,1460,0,len(mask[0]))
 mask = mask_box(mask,1100,1650,0,500)
@@ -360,6 +343,7 @@ mask = mask_box(mask,1100,1650,0,500)
 mean = np.mean(data)
 std = np.std(data)
 #background = mean + 1*std 
+
 # Real threshold
 sigma_away = 4
 background = gaussian_params[0] + sigma_away*abs(gaussian_params[1])
@@ -376,15 +360,11 @@ count, mask, source_map = source_detection(data,mask,background,source_map,frame
 galaxy_map, mask = contam_removal(mask, source_map,lower_pix_limit, upper_pix_limit)
 
 
-print("start mag calcs")
 for ob in Source.galaxy_list:
-    print("next")
-    background_contribution = calculate_background_contribution(ob, data,mask,background, 12)
-    ob.set_background_contribution(background_contribution)
+    background_contribution, bg_error = calculate_background_contribution(ob, data,mask,background, 12)
+    ob.set_background_contribution(background_contribution, bg_error)
     
-    mag = ob.get_magnitude(instrument_zero_point)
-    ob.set_mag(mag)
-print("done mag") 
+    mag = ob.find_magnitude(instrument_zero_point)
 
 
 #print("MASK: \n",mask)
@@ -402,6 +382,8 @@ for i in range(0,len(mask)):
         if mask[i][j] == True:
             num_pix_unmasked +=1
 print("Number of (unmasked) pixels searched over =",num_pix_unmasked)
+
+
 #---------Plot of galaxies (for debugging)-----------#
 x = []
 y = []
@@ -422,11 +404,6 @@ plt.ylabel('y pixel coordinates')
 plt.title('Visual Representation (for Debugging) of identified Galaxies within image subsection. \n Galaxy coordinates and ~size shown.')
 plt.show()
 
-
-
-# ob_file = open("galax_list",'ab')
-# pk.dump(Source.galaxy_list,ob_file)
-# ob_file.close()
 
 out_data = []
 for ob in Source.galaxy_list:
