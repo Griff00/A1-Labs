@@ -187,7 +187,7 @@ def mask_box(mask, box_x1, box_x2, box_y1, box_y2):
             mask[j][i] = False
     return mask
 
-def calculate_background_contribution(source, data,mask, aperture_radius=12):
+def calculate_background_contribution(source, data,mask, global_background, aperture_radius=12):
     #Calculates the total background contribution to a given source
     n_pixels_considered = 0
     total_counts = 0
@@ -197,16 +197,38 @@ def calculate_background_contribution(source, data,mask, aperture_radius=12):
     x_avg_source = sum(map(lambda x: x[0], coords))/len(coords)
     y_avg_source = sum(map(lambda x: x[1], coords))/len(coords)
     
+    x_low = int(x_avg_source - (aperture_radius +5))
+    x_high = int(x_avg_source + (aperture_radius +5))
+    y_high = int(y_avg_source + (aperture_radius +5))
+    y_low = int(y_avg_source - (aperture_radius +5))
+    
+    if x_low < 0:
+        x_low = 0
+    if x_high >= len(data[0]):
+        x_high = len(data[0]) -1
+    if y_low < 0:
+        y_low = 0
+    if y_high >= len(data):
+        y_high = len(data) -1           
+    
+    
     #find + sum over the aperture
-    for y in range(0,len(data)):
-        for x in range(0,len(data[0])):
+    for y in range(y_low,y_high):
+        
+        for x in range(x_low,x_high):
+            
             if (y-y_avg_source)**2+(x-x_avg_source)**2 < aperture_radius**2:
                 if not (x,y) in coords and mask[y][x] == True:
                     total_counts += data[y][x]
                     n_pixels_considered += 1
                     
-    local_bg_emmission = total_counts/n_pixels_considered
-    total_contribution_to_source = local_bg_emmission*len(coords)
+    if n_pixels_considered != 0:
+        
+        local_bg_emmission = total_counts/n_pixels_considered
+        total_contribution_to_source = local_bg_emmission*len(coords)
+        
+    else:
+        total_contribution_to_source = global_background*len(coords)
     
     return total_contribution_to_source
     
@@ -339,7 +361,8 @@ mean = np.mean(data)
 std = np.std(data)
 #background = mean + 1*std 
 # Real threshold
-background = gaussian_params[0] + 3*abs(gaussian_params[1])
+sigma_away = 4
+background = gaussian_params[0] + sigma_away*abs(gaussian_params[1])
 #background = 3444
 
 #j: lower & upper pixel number limits for removing contamination
@@ -356,7 +379,7 @@ galaxy_map, mask = contam_removal(mask, source_map,lower_pix_limit, upper_pix_li
 print("start mag calcs")
 for ob in Source.galaxy_list:
     print("next")
-    background_contribution = calculate_background_contribution(ob, data,mask, 12)
+    background_contribution = calculate_background_contribution(ob, data,mask,background, 12)
     ob.set_background_contribution(background_contribution)
     
     mag = ob.get_magnitude(instrument_zero_point)
@@ -364,14 +387,21 @@ for ob in Source.galaxy_list:
 print("done mag") 
 
 
-print("MASK: \n",mask)
-print("SOURCE MAP: \n", source_map)
-print("OBJECT COUNT:",count)
+#print("MASK: \n",mask)
+#print("SOURCE MAP: \n", source_map)
+#print("OBJECT COUNT:",count)
 galax_count = len(Source.galaxy_list)
-print("GALAXY MAP: \n", galaxy_map)
+#print("GALAXY MAP: \n", galaxy_map)
 print("GALAXY COUNT:",galax_count)
+print("Sigma Away (used to set threshold)=",sigma_away)
+print("THESHOLD =",background, "(counts per pixel)")
 
-
+num_pix_unmasked =0
+for i in range(0,len(mask)):
+    for j in range(0,len(mask[0])):
+        if mask[i][j] == True:
+            num_pix_unmasked +=1
+print("Number of (unmasked) pixels searched over =",num_pix_unmasked)
 #---------Plot of galaxies (for debugging)-----------#
 x = []
 y = []
@@ -400,5 +430,5 @@ plt.show()
 
 out_data = []
 for ob in Source.galaxy_list:
-    out_data.append(sum(ob.mag))
+    out_data.append(ob.mag)
 np.savetxt('galaxy_list.csv',out_data, delimiter=",")
