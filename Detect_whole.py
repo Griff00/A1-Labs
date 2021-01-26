@@ -30,7 +30,7 @@ data = real_data
 #-------------------------------------------------------#
 #----------------------HISTOGRAM------------------------#
 #-------------------------------------------------------#
-plot_histogram = True
+plot_histogram = False
 if plot_histogram:
     #Change this to make the histogram more/less detailed
     histogram_no_of_bins = 500
@@ -88,8 +88,6 @@ if plot_histogram:
     print("The parameters used to calculate this fit were a mean of %f \pm %f, a standard deviation of %f \pm %f, and a scaling factor of %f \pm %f"%(gaussian_params[0], gaussian_params_errs[0], gaussian_params[1], gaussian_params_errs[1] , gaussian_params[2],gaussian_params_errs[2]))
 
 
-
-
 #-----------------------------------------------------------#
 #------------------SOURCE DETECTION-------------------------#
 #-----------------------------------------------------------#
@@ -132,6 +130,17 @@ class Source:
         self.background_contribution = background_contribution
         self.background_contribution_err = background_contribution_err
 
+    def remove_source(self,mask,galaxy_map):
+        Source.galaxy_list.remove(self)
+        Source.removed_list.append(self)
+                            
+        coords = self.get_pixel_coords()
+        for i in range(0,len(coords)):
+            galaxy_map[coords[i][1]][coords[i][0]] = 0
+            mask[coords[i][1]][coords[i][0]] = False 
+            
+        return mask, galaxy_map
+
     def get_pixel_coords(self):
         return self.pixel_coords
 
@@ -146,7 +155,8 @@ class Source:
         tot_counts_err = np.sqrt(sum(map(lambda x: x**2, self.pixel_count_errors)) + self.background_contribution_err**2)
         
         if tot_counts <= 0:
-            print("tot",tot_counts)
+            print("tot",tot_counts,"num_pix",self.num_pixels)
+            print("counts",self.pixel_counts,"back",self.background_contribution)
             tot_counts = 1
             tot_counts_err = 0
         
@@ -184,7 +194,7 @@ def mask_box(mask, box_x1, box_x2, box_y1, box_y2):
             mask[j][i] = False
     return mask
 
-def calculate_background_contribution(source, data,mask, global_background, aperture_radius=12):
+def calculate_background_contribution(source, data,mask, global_background,source_map, aperture_radius=12):
     #Calculates the total background contribution to a given source
     n_pixels_considered = 0
     counts_considered = []
@@ -212,7 +222,7 @@ def calculate_background_contribution(source, data,mask, global_background, aper
     for y in range(y_low,y_high):
         for x in range(x_low,x_high):            
             if (y-y_avg_source)**2+(x-x_avg_source)**2 < aperture_radius**2:
-                if not (x,y) in coords and mask[y][x] == True:
+                if not (x,y) in coords and mask[y][x] == True and source_map[y][x] == 0:
                     counts_considered.append(data[y][x])
                     n_pixels_considered += 1
                     
@@ -305,13 +315,8 @@ def contam_removal(mask, source_map,lower_pix_limit, upper_pix_limit):
     
     for ob in galaxy_list_orig:        
         if ob.get_num_pixels() <= lower_pix_limit or ob.get_num_pixels() >= upper_pix_limit:
-            Source.galaxy_list.remove(ob)
-            Source.removed_list.append(ob)
-                                
-            coords = ob.get_pixel_coords()
-            for i in range(0,len(coords)):
-                galaxy_map[coords[i][1]][coords[i][0]] = 0
-                mask[coords[i][1]][coords[i][0]] = False
+            #Remove source
+            mask, galaxy_map = ob.remove_source(mask,galaxy_map)
                           
     return galaxy_map, mask
    
@@ -340,14 +345,17 @@ mask = mask_box(mask,1100,1650,0,500)
 #--------------BACKGROUND THRESHOLD-----------------------------#
 
 # Debug / testing threshold:
-mean = np.mean(data)
-std = np.std(data)
-#background = mean + 1*std 
+
+
 
 # Real threshold
 sigma_away = 4
-background = gaussian_params[0] + sigma_away*abs(gaussian_params[1])
-#background = 3444
+#background = gaussian_params[0] + sigma_away*abs(gaussian_params[1])
+mean = 3418.2
+std = 12.2
+
+background = mean + sigma_away*std 
+
 
 #j: lower & upper pixel number limits for removing contamination
 lower_pix_limit = 1
@@ -359,9 +367,9 @@ source_map = np.zeros((len(data),len(data[0])))
 count, mask, source_map = source_detection(data,mask,background,source_map,frame_cutoffs)
 galaxy_map, mask = contam_removal(mask, source_map,lower_pix_limit, upper_pix_limit)
 
-
-for ob in Source.galaxy_list:
-    background_contribution, bg_error = calculate_background_contribution(ob, data,mask,background, 12)
+iteration_list = Source.galaxy_list.copy()
+for ob in iteration_list:
+    background_contribution, bg_error = calculate_background_contribution(ob, data,mask,background,source_map, 12)
     ob.set_background_contribution(background_contribution, bg_error)
     
     mag = ob.find_magnitude(inst_zero_point, inst_zero_point_err)

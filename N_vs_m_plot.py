@@ -8,6 +8,7 @@ Created on Thu Jan 21 12:29:40 2021
 
 from astropy.io import fits
 import numpy as np
+import scipy.optimize as spo
 import matplotlib.pyplot as plt
 
 input_data = np.loadtxt('galaxy_list.csv', delimiter=",")
@@ -55,11 +56,22 @@ for i in range (0,len(log_N)):
     log_errs.append(err)
 
 
+def theory(x,grad,const):
+    return grad*x + const
+
+theory_params, pcov= spo.curve_fit(theory,histogram_bin_lowest_vals[5:30],log_N[5:30], p0=[0.6,0])
+theory_params_errs = np.sqrt(np.diag(pcov))
+
+t_xvals = np.linspace(data_min, data_max, 1000)
+t_yvals = theory(t_xvals, *theory_params)
+
 plt.figure()
-plt.plot(histogram_bin_lowest_vals,log_N)
-plt.errorbar(histogram_bin_lowest_vals,log_N,yerr = log_errs,fmt ='.',capsize=3)
+#plt.plot(histogram_bin_lowest_vals,log_N)
+plt.errorbar(histogram_bin_lowest_vals,log_N,yerr = log_errs,fmt ='x',capsize=3)
+plt.plot(t_xvals,t_yvals)
 plt.xlabel('Magnitude (m)')
 plt.ylabel('log(N(<m)')
 plt.show()
 
 print(count)
+print("The parameters used to calculate this fit were a gradient of %f \pm %f, and a constant of %f \pm %f"%(theory_params[0], theory_params_errs[0], theory_params[1], theory_params_errs[1]))
