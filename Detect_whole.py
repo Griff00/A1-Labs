@@ -14,8 +14,8 @@ import pickle as pk
 hdulist = fits.open("mosaic.fits")
 real_data = hdulist[0].data
 header = hdulist[0].header
-instrument_zero_point = header['MAGZPT']
-instrument_zero_point_err = header['MAGZRR']
+inst_zero_point = header['MAGZPT']
+inst_zero_point_err = header['MAGZRR']
 
 generated_test_data = [[1,1,1,2,1,2,1,2,1,2,1,1],
         [1,1,1,2,1,30,30,2,1,2,40,1],
@@ -30,7 +30,7 @@ data = real_data
 #-------------------------------------------------------#
 #----------------------HISTOGRAM------------------------#
 #-------------------------------------------------------#
-plot_histogram = False
+plot_histogram = True
 if plot_histogram:
     #Change this to make the histogram more/less detailed
     histogram_no_of_bins = 500
@@ -364,7 +364,7 @@ for ob in Source.galaxy_list:
     background_contribution, bg_error = calculate_background_contribution(ob, data,mask,background, 12)
     ob.set_background_contribution(background_contribution, bg_error)
     
-    mag = ob.find_magnitude(instrument_zero_point)
+    mag = ob.find_magnitude(inst_zero_point, inst_zero_point_err)
 
 
 #print("MASK: \n",mask)
@@ -405,7 +405,11 @@ plt.title('Visual Representation (for Debugging) of identified Galaxies within i
 plt.show()
 
 
-out_data = []
+
+mags = []
+mags_err = []
 for ob in Source.galaxy_list:
-    out_data.append(ob.mag)
+    mags.append(ob.mag)
+    mags_err.append(ob.mag_err)    
+out_data = [mags,mags_err]
 np.savetxt('galaxy_list.csv',out_data, delimiter=",")
