@@ -231,7 +231,7 @@ def find_counts_within_aperture(data, mask, source_map, x_centre, y_centre, aper
     for y in range(search_limits['yl'],search_limits['yh']):
         for x in range(search_limits['xl'],search_limits['xh']):            
             if (y-y_centre)**2+(x-x_centre)**2 < aperture_radius**2:
-                if mask[y][x] == True and source_map[y][x] == 0:
+                if mask[y][x] == True: 
                     tot_counts_to_consider.append(data[y][x])
     
     return tot_counts_to_consider

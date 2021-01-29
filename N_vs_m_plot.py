@@ -36,10 +36,6 @@ N_cum = np.cumsum(histogram_counts)
 cum_counts_errs = []
 for i in range (0,len(N_cum)):
     cum_counts_errs.append(np.sqrt(N_cum[i]))
-    
-    
-
-
 
 
 plt.plot(histogram_bin_lowest_vals,N_cum)
@@ -59,7 +55,7 @@ for i in range (0,len(log_N)):
 def theory(x,grad,const):
     return grad*x + const
 
-theory_params, pcov= spo.curve_fit(theory,histogram_bin_lowest_vals[5:30],log_N[5:30], p0=[0.6,0])
+theory_params, pcov= spo.curve_fit(theory,histogram_bin_lowest_vals[5:25],log_N[5:25], p0=[0.6,0])
 theory_params_errs = np.sqrt(np.diag(pcov))
 
 t_xvals = np.linspace(data_min, data_max, 1000)
@@ -71,6 +67,34 @@ plt.errorbar(histogram_bin_lowest_vals,log_N,yerr = log_errs,fmt ='x',capsize=3)
 plt.plot(t_xvals,t_yvals)
 plt.xlabel('Magnitude (m)')
 plt.ylabel('log(N(<m)')
+
+
+graphical_params = {
+  # 'axes.titlesize': 'x-large', 
+  # 'axes.labelsize': 'large',sss
+   'font.size': 14,
+  # 'legend.fontsize': 14,
+  # 'xtick.labelsize': 10,
+  # 'ytick.labelsize': 10,
+   'figure.figsize': [11.69,8.27],
+   'errorbar.capsize': 8
+   } 
+plt.rcParams.update(graphical_params)
+plt.grid()
+plt.minorticks_on()
+#plt.grid(which='major', linestyle='-', linewidth='1', alpha = 0.7, color='black')
+#plt.grid(which='minor', linestyle=':', linewidth='1', color='grey')
+plt.xlim(9,20)
+plt.ylim(-0.5,4)
+#plt.xticks(np.arange(1,L+1,1))
+#plt.title("Height of pile with time for Oslo Model")
+#plt.xlabel('Time (in number of grains added)')
+#plt.ylabel('Height of pile') 
+plt.style.use('default')
+plt.legend;
+plt.show()
+
+
 plt.show()
 
 print(count)
