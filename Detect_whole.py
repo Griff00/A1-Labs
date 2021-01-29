@@ -9,7 +9,6 @@ from astropy.io import fits
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy.optimize as spo
-import pickle as pk
 
 hdulist = fits.open("mosaic.fits")
 real_data = hdulist[0].data
@@ -23,9 +22,10 @@ generated_test_data = [[1,1,1,2,1,2,1,2,1,2,1,1],
         [1,2,1,2,1,2,1,2,1,2,1,1]]
 
 #Cutting out the specified test region
-#test_data = list(map(lambda x: x[660:1260], real_data[3960:4340]))
-#data = test_data
-data = real_data
+test_data = list(map(lambda x: x[660:1260], real_data[3960:4340]))
+data = test_data
+
+#data = real_data
 
 #-------------------------------------------------------#
 #----------------------HISTOGRAM------------------------#
@@ -129,6 +129,10 @@ class Source:
     def set_background_contribution(self,background_contribution, background_contribution_err):
         self.background_contribution = background_contribution
         self.background_contribution_err = background_contribution_err
+        
+    def set_brightness(self,brightness, brightness_err):
+        self.brightness = brightness
+        self.brightness_err = brightness_err
 
     def remove_source(self,mask,galaxy_map):
         Source.galaxy_list.remove(self)
@@ -151,8 +155,10 @@ class Source:
         return self.pixel_counts
    
     def find_magnitude(self, inst_zero_point, inst_zero_point_err):
-        tot_counts = sum(self.pixel_counts) - self.background_contribution
-        tot_counts_err = np.sqrt(sum(map(lambda x: x**2, self.pixel_count_errors)) + self.background_contribution_err**2)
+        #tot_counts = sum(self.pixel_counts) - self.background_contribution
+        #tot_counts_err = np.sqrt(sum(map(lambda x: x**2, self.pixel_count_errors)) + self.background_contribution_err**2)
+        tot_counts = self.brightness
+        tot_counts_err = self.brightness_err
         
         if tot_counts <= 0:
             print("tot",tot_counts,"num_pix",self.num_pixels)
@@ -194,47 +200,76 @@ def mask_box(mask, box_x1, box_x2, box_y1, box_y2):
             mask[j][i] = False
     return mask
 
-def calculate_background_contribution(source, data,mask, global_background,source_map, aperture_radius=12):
+def check_search_limits_valid(search_limits, data):    
+    if search_limits['xl'] < 0:
+        search_limits['xl'] = 0
+        
+    if search_limits['xh'] >= len(data[0]):
+        search_limits['xh'] = len(data[0]) -1
+        
+    if search_limits['yl'] < 0:
+        search_limits['yl'] = 0
+        
+    if search_limits['yh'] >= len(data):
+        search_limits['yh'] = len(data) -1
+        
+    return search_limits
+
+def find_counts_within_aperture(data, mask, source_map, x_centre, y_centre, aperture_radius): 
+    tot_counts_to_consider = []
+    
+    #define box to serch within
+    x_low = int(x_centre - (aperture_radius + 5))
+    x_high = int(x_centre + (aperture_radius + 5))
+    y_low = int(y_centre - (aperture_radius + 5))
+    y_high = int(y_centre + (aperture_radius + 5))
+    
+    search_limits = {'xl':x_low, 'xh':x_high, 'yl':y_low, 'yh':y_high}    
+    search_limits = check_search_limits_valid(search_limits, data)
+    
+    #find + sum over the aperture
+    for y in range(search_limits['yl'],search_limits['yh']):
+        for x in range(search_limits['xl'],search_limits['xh']):            
+            if (y-y_centre)**2+(x-x_centre)**2 < aperture_radius**2:
+                if mask[y][x] == True and source_map[y][x] == 0:
+                    tot_counts_to_consider.append(data[y][x])
+    
+    return tot_counts_to_consider
+
+def calculate_source_counts_with_double_apertures(source, data, mask, source_map, global_background):
     #Calculates the total background contribution to a given source
-    n_pixels_considered = 0
-    counts_considered = []
     coords = source.get_pixel_coords()
     
     #calculate average centres for the surce (where aperture will be centred)
     x_avg_source = sum(map(lambda x: x[0], coords))/len(coords)
     y_avg_source = sum(map(lambda x: x[1], coords))/len(coords)
     
-    x_low = int(x_avg_source - (aperture_radius + 5))
-    x_high = int(x_avg_source + (aperture_radius + 5))
-    y_high = int(y_avg_source + (aperture_radius + 5))
-    y_low = int(y_avg_source - (aperture_radius + 5))
+    #find largest axis of the source
+    source_radius = 0
+    for coord in coords:
+        c_distance = np.sqrt((coord[1]-y_avg_source)**2+(coord[0]-x_avg_source)**2)
+        if c_distance > source_radius:
+            source_radius= np.ceil(c_distance)
+            
+    inner_ap_radius = source_radius + 1
+    inner_ap_counts = find_counts_within_aperture(data,mask,source_map, x_avg_source,y_avg_source, inner_ap_radius)
     
-    if x_low < 0:
-        x_low = 0
-    if x_high >= len(data[0]):
-        x_high = len(data[0]) -1
-    if y_low < 0:
-        y_low = 0
-    if y_high >= len(data):
-        y_high = len(data) -1
+    outer_ap_radius = inner_ap_radius*3
+    outer_ap_counts = find_counts_within_aperture(data,mask,source_map, x_avg_source,y_avg_source, outer_ap_radius)
     
-    #find + sum over the aperture
-    for y in range(y_low,y_high):
-        for x in range(x_low,x_high):            
-            if (y-y_avg_source)**2+(x-x_avg_source)**2 < aperture_radius**2:
-                if not (x,y) in coords and mask[y][x] == True and source_map[y][x] == 0:
-                    counts_considered.append(data[y][x])
-                    n_pixels_considered += 1
-                    
-    if n_pixels_considered != 0:
-        local_bg_emmission = sum(counts_considered)/n_pixels_considered
-        local_emmission_err = np.std(counts_considered)
-        total_contribution_to_source = local_bg_emmission*len(coords)
-    else:
-        total_contribution_to_source = global_background*len(coords)
-        local_emmission_err = np.sqrt(global_background)
+    for count in inner_ap_counts:
+        outer_ap_counts.remove(count)    
+        
+    local_bg_emission = sum(outer_ap_counts)/len(outer_ap_counts)
+    local_bg_emission_err = np.std(outer_ap_counts)
     
-    return total_contribution_to_source, local_emmission_err
+    source_emission = sum(inner_ap_counts) - local_bg_emission * len(inner_ap_counts)
+    source_emission_err = local_bg_emission_err * len(inner_ap_counts)
+    
+    print()
+    print( '%f \pm %f' %(source_emission,source_emission_err))
+    
+    return source_emission, source_emission_err
     
 
 def source_detection(data,mask,background,source_map,frame_cutoffs): 
@@ -324,6 +359,7 @@ def contam_removal(mask, source_map,lower_pix_limit, upper_pix_limit):
 #-------------------BUILDING THE MASK---------------------------------#
 
 mask = np.ones((len(data),len(data[0])), dtype=bool)
+'''
 # For test data
 #frame_cutoffs = {"xl":1,"xr":1,"yt":1,"yb":1}
 #For real data
@@ -341,12 +377,10 @@ mask = mask_box(mask,2350,len(mask),4100,len(mask[0]))
 mask = mask_box(mask,1200,1650,2950,3450)
 mask = mask_box(mask,1420,1460,0,len(mask[0]))
 mask = mask_box(mask,1100,1650,0,500)
+'''
+
 
 #--------------BACKGROUND THRESHOLD-----------------------------#
-
-# Debug / testing threshold:
-
-
 
 # Real threshold
 sigma_away = 4
@@ -359,7 +393,7 @@ background = mean + sigma_away*std
 
 #j: lower & upper pixel number limits for removing contamination
 lower_pix_limit = 1
-upper_pix_limit = 1000
+upper_pix_limit = 100000000
 
 #---------------------------------------------------------------#
 
@@ -369,8 +403,11 @@ galaxy_map, mask = contam_removal(mask, source_map,lower_pix_limit, upper_pix_li
 
 iteration_list = Source.galaxy_list.copy()
 for ob in iteration_list:
-    background_contribution, bg_error = calculate_background_contribution(ob, data,mask,background,source_map, 12)
-    ob.set_background_contribution(background_contribution, bg_error)
+    #background_contribution, bg_error = calculate_background_contribution(ob, data,mask,background,source_map, 12)
+    #ob.set_background_contribution(background_contribution, bg_error)
+    
+    source_brightness, source_brightness_err = calculate_source_counts_with_double_apertures(ob,data,mask, source_map, background)
+    ob.set_brightness(source_brightness, source_brightness_err)
     
     mag = ob.find_magnitude(inst_zero_point, inst_zero_point_err)
 
@@ -411,7 +448,6 @@ plt.xlabel('x pixel coordinates')
 plt.ylabel('y pixel coordinates')
 plt.title('Visual Representation (for Debugging) of identified Galaxies within image subsection. \n Galaxy coordinates and ~size shown.')
 plt.show()
-
 
 
 mags = []
