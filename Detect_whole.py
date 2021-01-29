@@ -22,10 +22,10 @@ generated_test_data = [[1,1,1,2,1,2,1,2,1,2,1,1],
         [1,2,1,2,1,2,1,2,1,2,1,1]]
 
 #Cutting out the specified test region
-test_data = list(map(lambda x: x[660:1260], real_data[3960:4340]))
-data = test_data
+#test_data = list(map(lambda x: x[660:1260], real_data[3960:4340]))
+#data = test_data
 
-#data = real_data
+data = real_data
 
 #-------------------------------------------------------#
 #----------------------HISTOGRAM------------------------#
@@ -254,7 +254,7 @@ def calculate_source_counts_with_double_apertures(source, data, mask, source_map
     inner_ap_radius = source_radius + 1
     inner_ap_counts = find_counts_within_aperture(data,mask,source_map, x_avg_source,y_avg_source, inner_ap_radius)
     
-    outer_ap_radius = inner_ap_radius*3
+    outer_ap_radius = inner_ap_radius+10
     outer_ap_counts = find_counts_within_aperture(data,mask,source_map, x_avg_source,y_avg_source, outer_ap_radius)
     
     for count in inner_ap_counts:
@@ -359,7 +359,7 @@ def contam_removal(mask, source_map,lower_pix_limit, upper_pix_limit):
 #-------------------BUILDING THE MASK---------------------------------#
 
 mask = np.ones((len(data),len(data[0])), dtype=bool)
-'''
+
 # For test data
 #frame_cutoffs = {"xl":1,"xr":1,"yt":1,"yb":1}
 #For real data
@@ -374,10 +374,10 @@ mask = mask_box(mask,2100,len(mask),4400,len(mask[0]))
 mask = mask_box(mask,2350,len(mask),4100,len(mask[0]))
 
 #bright central star (and bleeding from it)
-mask = mask_box(mask,1200,1650,2950,3450)
+mask = mask_box(mask,1000,1800,2700,3700)
 mask = mask_box(mask,1420,1460,0,len(mask[0]))
 mask = mask_box(mask,1100,1650,0,500)
-'''
+
 
 
 #--------------BACKGROUND THRESHOLD-----------------------------#
@@ -392,8 +392,8 @@ background = mean + sigma_away*std
 
 
 #j: lower & upper pixel number limits for removing contamination
-lower_pix_limit = 1
-upper_pix_limit = 100000000
+lower_pix_limit = 3
+upper_pix_limit = 1000
 
 #---------------------------------------------------------------#
 
