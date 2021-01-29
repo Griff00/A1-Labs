@@ -233,9 +233,12 @@ def calculate_background_contribution(source, data,mask, global_background,sourc
     else:
         total_contribution_to_source = global_background*len(coords)
         local_emmission_err = np.sqrt(global_background)
+        
     
     return total_contribution_to_source, local_emmission_err
-    
+ 
+
+   
 
 def source_detection(data,mask,background,source_map,frame_cutoffs): 
     # Cyles through each pixel checking for sources
@@ -324,10 +327,10 @@ def contam_removal(mask, source_map,lower_pix_limit, upper_pix_limit):
 #-------------------BUILDING THE MASK---------------------------------#
 
 mask = np.ones((len(data),len(data[0])), dtype=bool)
-# For test data
-#frame_cutoffs = {"xl":1,"xr":1,"yt":1,"yb":1}
 #For real data
 #frame_cutoffs = {"xl":150,"xr":2450,"yt":4500,"yb":150} 
+
+#Values are the thickness (in number of pixels) to cut off (not coordinate positions)
 frame_cutoffs = {"xl":150,"xr":120,"yt":111,"yb":150} 
 mask = mask_frame(mask, frame_cutoffs)
 
@@ -338,7 +341,12 @@ mask = mask_box(mask,2100,len(mask),4400,len(mask[0]))
 mask = mask_box(mask,2350,len(mask),4100,len(mask[0]))
 
 #bright central star (and bleeding from it)
-mask = mask_box(mask,1200,1650,2950,3450)
+
+# Original mask values:
+# mask = mask_box(mask,1200,1650,2950,3450)
+
+#Expanded mask values:
+mask = mask_box(mask,1000,1800,2700,3700)
 mask = mask_box(mask,1420,1460,0,len(mask[0]))
 mask = mask_box(mask,1100,1650,0,500)
 
@@ -350,15 +358,15 @@ mask = mask_box(mask,1100,1650,0,500)
 
 # Real threshold
 sigma_away = 4
-#background = gaussian_params[0] + sigma_away*abs(gaussian_params[1])
+# From gaussian fit ---> so don't need to keep running gaussian
 mean = 3418.2
 std = 12.2
 
 background = mean + sigma_away*std 
-
+#background = gaussian_params[0] + sigma_away*abs(gaussian_params[1])
 
 #j: lower & upper pixel number limits for removing contamination
-lower_pix_limit = 1
+lower_pix_limit = 3
 upper_pix_limit = 1000
 
 #---------------------------------------------------------------#
@@ -383,7 +391,8 @@ galax_count = len(Source.galaxy_list)
 print("GALAXY COUNT:",galax_count)
 print("Sigma Away (used to set threshold)=",sigma_away)
 print("THESHOLD =",background, "(counts per pixel)")
-
+print("Minimum source pixel number",lower_pix_limit)
+print("Maximum source pixel number",upper_pix_limit)
 num_pix_unmasked =0
 for i in range(0,len(mask)):
     for j in range(0,len(mask[0])):
