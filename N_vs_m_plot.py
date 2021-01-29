@@ -46,16 +46,25 @@ plt.show()
 
 log_N = np.log10(N_cum)
 
-log_errs = []
-for i in range (0,len(log_N)):
-    err = 0.434*(cum_counts_errs[i]/N_cum[i])
-    log_errs.append(err)
+upper = []
+lower = []
+
+for i in range(0,len(N_cum)):
+    upper.append(abs(np.log10(N_cum[i]+cum_counts_errs[i]) -log_N[i]))
+    lower.append(abs(np.log10(N_cum[i]-cum_counts_errs[i]) -log_N[i]))
+    
+    
+
+log_errs = [lower,upper]
+# for i in range (0,len(log_N)):
+#     err = 0.434*(cum_counts_errs[i]/N_cum[i])
+#     log_errs.append(err)
 
 
 def theory(x,grad,const):
     return grad*x + const
  #Can change values straight line is fit too (atm its 15-38)
-theory_params, pcov= spo.curve_fit(theory,histogram_bin_lowest_vals[15:38],log_N[15:38], p0=[0.6,0])
+theory_params, pcov= spo.curve_fit(theory,histogram_bin_lowest_vals[3:38],log_N[3:38], p0=[0.6,0])
 theory_params_errs = np.sqrt(np.diag(pcov))
 
 t_xvals = np.linspace(data_min, data_max, 1000)
